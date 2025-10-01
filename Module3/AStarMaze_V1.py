@@ -4,7 +4,7 @@
 ####
 #### NOTE:
 #### tkinter and PQ are part of the standard Python library.
-#### type "pip list" at the terminal so see if "pillow" 
+#### type "pip list" at the terminal so see if "Pillow" 
 #### is missing. If so, type at the terminal:
 ####     pip install Pillow
 ####
@@ -222,6 +222,7 @@ game = MazeGame(root, maze)
 root.bind("<KeyPress>", game.move_agent)
 
 root.mainloop()
+
 
 
 
