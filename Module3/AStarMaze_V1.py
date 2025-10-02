@@ -2,16 +2,9 @@
 #### MazeGame uses a grid of rows X cols to demonstrate
 #### pathfinding using A*.
 ####
-#### NOTE:
-#### tkinter and PQ are part of the standard Python library.
-#### type "pip list" at the terminal so see if "Pillow" 
-#### is missing. If so, type at the terminal:
-####     pip install Pillow
-####
-#### This will install Python's image library.
 #######################################################
 import tkinter as tk
-from PIL import ImageTk, Image, ImageOps 
+#from PIL import ImageTk, Image, ImageOps 
 from queue import PriorityQueue
 
 
@@ -222,6 +215,7 @@ game = MazeGame(root, maze)
 root.bind("<KeyPress>", game.move_agent)
 
 root.mainloop()
+
 
 
 
