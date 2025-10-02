@@ -5,7 +5,7 @@
 #### AI, Spring 2024
 #######################################################
 import tkinter as tk
-from PIL import ImageTk, Image, ImageOps 
+#from PIL import ImageTk, Image, ImageOps 
 from queue import PriorityQueue
 
 
@@ -238,6 +238,7 @@ game = MazeGame(root, maze)
 root.bind("<KeyPress>", game.move_agent)
 
 root.mainloop()
+
 
 
 
