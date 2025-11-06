@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Q-Learning Simulation (3x3)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        /* Custom styles for grid and layout */
+        .grid-cell {
+            width: 80px;
+            height: 80px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: bold;
+            border: 2px solid #374151;
+            transition: background-color 0.3s;
+        }
+        .agent { background-color: #3b82f6; color: white; }
+        .goal { background-color: #10b981; color: white; }
+        /* Highlighting the Goal state when agent is on it */
+        .goal.agent { background-color: #059669; color: white; border-color: #064e3b; }
+        body { font-family: 'Inter', sans-serif; background-color: #f3f4f6; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <script>
+        // Load Inter font and custom config
+        tailwind.config = {
+            theme: {
+                extend: {
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    },
+                }
+            }
+        }
+    </script>
+
+    <div class="max-w-4xl mx-auto bg-white p-6 shadow-xl rounded-xl">
+        <h1 class="text-3xl font-extrabold text-gray-800 mb-2">Interactive Q-Learning (3x3 Grid)</h1>
+        <p class="text-gray-600 mb-6">Use the **Run Training** button to quickly train the agent, or the **Spacebar** for step-by-step observation.</p>
+
+        <!-- Q-Learning Formula (Bellman Equation) - FIXED TO USE PLAIN HTML/UNICODE -->
+        <div class="bg-gray-100 p-4 rounded-lg mb-6 shadow-inner text-center">
+            <h3 class="text-lg font-bold text-gray-700 mb-2">Q-Learning Update Rule (Bellman Equation)</h3>
+            <div class="text-xl font-mono text-indigo-800 overflow-x-auto p-2 bg-gray-50 rounded-md">
+                <span class="text-2xl font-extrabold block">
+                    Q(s, a) &larr; Q(s, a) + &alpha; [ r + &gamma; max Q(s', a') - Q(s, a) ]
+                </span>
+            </div>
+            <p class="text-sm text-gray-600 mt-2">
+                &alpha;: Learning Rate | &gamma;: Discount Factor | r: Immediate Reward | s': Next State
+            </p>
+        </div>
+        
+        <!-- Status and Controls -->
+        <div class="flex flex-wrap gap-4 justify-between items-center bg-indigo-50 p-4 rounded-lg mb-6 shadow-inner">
+            <div id="status-episodes" class="text-lg font-semibold text-indigo-700">Episode: 1</div>
+            <div id="status-step" class="text-lg font-semibold text-indigo-700">Step: 0</div>
+            <div id="status-epsilon" class="text-lg font-semibold text-indigo-700">Epsilon: 1.00</div>
+            <div id="status-reward" class="text-lg font-semibold text-indigo-700">Reward: 0.00</div>
+            
+            <button id="run-button" class="mt-3 sm:mt-0 px-4 py-2 bg-indigo-600 text-white font-bold rounded-lg hover:bg-indigo-700 transition duration-150 shadow-md">Run Training (Auto)</button>
+            <button id="step-button" class="mt-3 sm:mt-0 px-4 py-2 bg-gray-500 text-white font-bold rounded-lg hover:bg-gray-600 transition duration-150 shadow-md">Take 1 Step (Space)</button>
+        </div>
+
+        <div class="flex flex-col lg:flex-row gap-8">
+            <!-- Grid Visualization (Left) -->
+            <div class="lg:w-1/3">
+                <h2 class="text-xl font-bold mb-4 text-gray-700">Grid Map (3x3)</h2>
+                <div id="grid-container" class="grid grid-cols-3 border-separate border-spacing-0 overflow-hidden rounded-lg shadow-lg">
+                    <!-- Grid cells will be injected here -->
+                </div>
+                <div id="grid-message" class="mt-4 text-sm text-gray-500">Agent is at State 0 (R1, C1). Goal is at State 8 (R3, C3).</div>
+            </div>
+
+            <!-- Q-Table Display (Right) -->
+            <div class="lg:w-2/3 overflow-x-auto">
+                <h2 class="text-xl font-bold mb-4 text-gray-700">Q-Table (State vs. Action)</h2>
+                <table class="min-w-full divide-y divide-gray-200 shadow-lg rounded-lg overflow-hidden">
+                    <thead class="bg-gray-100">
+                        <tr>
+                            <th class="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">S (R, C)</th>
+                            <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">N (Up)</th>
+                            <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">S (Down)</th>
+                            <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">E (Right)</th>
+                            <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">W (Left)</th>
+                            <th class="px-3 py-2 text-center text-xs font-medium text-gray-500 uppercase tracking-wider">Best</th>
+                        </tr>
+                    </thead>
+                    <tbody id="q-table-body" class="bg-white divide-y divide-gray-200">
+                        <!-- Q-Table rows will be injected here -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // --- Q-Learning Simulation Logic (JavaScript Equivalent) ---
+
+        const GRID_SIZE = 3;
+        const NUM_STATES = GRID_SIZE * GRID_SIZE;
+        const ACTIONS = ['N', 'S', 'E', 'W'];
+        const NUM_ACTIONS = ACTIONS.length;
+        
+        // Agent (1,1) is index 0; Target (3,3) is index 8. (0-indexed [2, 2])
+        const START_STATE_RC = [0, 0];
+        const GOAL_STATE_RC = [2, 2];
+        const GOAL_STATE_IDX = rcToIdx(GOAL_STATE_RC);
+
+        // RL Parameters and Global State Tracking for Single-Step Mode
+        let qTable = Array.from({ length: NUM_STATES }, () => new Array(NUM_ACTIONS).fill(0));
+        let alpha = 0.1;    // Learning Rate
+        let gamma = 0.9;    // Discount Factor
+        let epsilon = 1.0;  // Exploration Rate
+        const epsilonMin = 0.01;
+        const epsilonDecay = 0.995;
+        
+        let currentEpisode = 1;
+        let currentStateIdx = rcToIdx(START_STATE_RC);
+        let currentStep = 0;
+        let episodeReward = 0;
+        const MAX_STEPS = 100; // Safety limit per episode
+
+        // --- NEW Global State for Fast Training ---
+        let isTrainingMode = false;
+        let trainingInterval = null;
+        const MAX_EPISODES_FOR_RUN = 200; // Target max episodes for fast run
+        let episodesRunInFastMode = 0;
+
+        // Rewards
+        const rewards = {
+            goal: 10,
+            move: -1,
+            wall: -5
+        };
+
+        // --- Utility Functions ---
+
+        /** Converts [row, col] (0-2) to state index (0-8). */
+        function rcToIdx([r, c]) {
+            return r * GRID_SIZE + c;
+        }
+
+        /** Converts state index (0-8) to [row, col] (0-2). */
+        function idxToRc(stateIdx) {
+            const r = Math.floor(stateIdx / GRID_SIZE);
+            const c = stateIdx % GRID_SIZE;
+            return [r, c];
+        }
+
+        /** Calculates the next state and reward based on action. */
+        function getNextState(currentIdx, actionIdx) {
+            let [r, c] = idxToRc(currentIdx);
+            const action = ACTIONS[actionIdx];
+            let reward = rewards.move;
+            let nextR = r;
+            let nextC = c;
+
+            // Proposed new coordinates
+            if (action === 'N') nextR -= 1;
+            else if (action === 'S') nextR += 1;
+            else if (action === 'E') nextC += 1;
+            else if (action === 'W') nextC -= 1;
+
+            // Check for boundaries
+            if (nextR >= 0 && nextR < GRID_SIZE && nextC >= 0 && nextC < GRID_SIZE) {
+                // Valid move
+                let nextIdx = rcToIdx([nextR, nextC]);
+                if (nextIdx === GOAL_STATE_IDX) {
+                    reward = rewards.goal;
+                }
+                return [nextIdx, reward];
+            } else {
+                // Hit a wall, stay in current state
+                reward = rewards.wall;
+                return [currentIdx, reward];
+            }
+        }
+
+        /** Epsilon-greedy policy for action selection. */
+        function chooseAction(stateIdx) {
+            if (Math.random() < epsilon) {
+                // Exploration: Choose a random action
+                return Math.floor(Math.random() * NUM_ACTIONS);
+            } else {
+                // Exploitation: Choose the action with the highest Q-value
+                let qValues = qTable[stateIdx];
+                let maxQ = -Infinity;
+                let bestActionIdx = 0;
+                
+                // Find the index of the max Q-value
+                for (let i = 0; i < NUM_ACTIONS; i++) {
+                    if (qValues[i] > maxQ) {
+                        maxQ = qValues[i];
+                        bestActionIdx = i;
+                    }
+                }
+                return bestActionIdx;
+            }
+        }
+
+        // --- Core Training Functions ---
+
+        /** Runs a single step of the Q-learning process. */
+        function runSingleStep() {
+            // 1. --- Episode Reset Check (if agent reached goal on previous step or max steps hit) ---
+            if (currentStateIdx === GOAL_STATE_IDX || currentStep >= MAX_STEPS) {
+                
+                const episodeMsg = (currentStateIdx === GOAL_STATE_IDX) 
+                    ? `Episode ${currentEpisode} completed. Total Reward: ${episodeReward.toFixed(2)}.`
+                    : `Episode ${currentEpisode} failed (max steps).`;
+
+                currentEpisode++;
+                
+                // Epsilon decay (applied only after a full episode)
+                epsilon = Math.max(epsilonMin, epsilon * epsilonDecay);
+                
+                currentStateIdx = rcToIdx(START_STATE_RC); // Reset agent to start
+                currentStep = 0;
+                episodeReward = 0;
+                
+                updateStatus(); // Update status with new episode/epsilon
+                renderGrid(currentStateIdx);
+                
+                if (!isTrainingMode) {
+                    // Only show detailed message if not in fast training mode
+                    document.getElementById('grid-message').textContent = `${episodeMsg} Starting new episode ${currentEpisode}...`;
+                }
+
+                // If in fast mode, check if we should stop after this reset
+                if (isTrainingMode) {
+                    episodesRunInFastMode++;
+                    if (episodesRunInFastMode >= MAX_EPISODES_FOR_RUN) {
+                        stopTraining(true); // Training finished naturally
+                    }
+                }
+                
+                return;
+            }
+
+            // --- Core Single Step Q-Learning ---
+            
+            // 2. Choose action and take it
+            const actionIdx = chooseAction(currentStateIdx);
+            const actionTaken = ACTIONS[actionIdx];
+            const [nextIdx, reward] = getNextState(currentStateIdx, actionIdx);
+            
+            // 3. Q-Table Update
+            const oldQValue = qTable[currentStateIdx][actionIdx];
+            const maxFutureQ = Math.max(...qTable[nextIdx]);
+
+            // Q-Learning Update Rule
+            const newQValue = (1 - alpha) * oldQValue + 
+                               alpha * (reward + gamma * maxFutureQ);
+
+            qTable[currentStateIdx][actionIdx] = parseFloat(newQValue.toFixed(4));
+            
+            // 4. Update state variables
+            episodeReward += reward;
+            currentStateIdx = nextIdx;
+            currentStep++;
+
+            // 5. Update UI (Only update UI fully if not in training mode, or periodically for visualization)
+            if (!isTrainingMode || currentStep % 5 === 0) {
+                renderQTable();
+                renderGrid(currentStateIdx);
+                updateStatus(reward, actionTaken);
+            }
+            
+            if (currentStateIdx === GOAL_STATE_IDX && !isTrainingMode) {
+                document.getElementById('grid-message').textContent = `GOAL REACHED! Total Reward: ${episodeReward.toFixed(2)}. Press SPACE to start Episode ${currentEpisode + 1}.`;
+            }
+        }
+        
+        /** Starts the fast training loop. */
+        function startTraining() {
+            isTrainingMode = true;
+            episodesRunInFastMode = 0;
+            document.getElementById('run-button').textContent = 'Stop Training';
+            document.getElementById('run-button').classList.remove('bg-indigo-600', 'hover:bg-indigo-700');
+            document.getElementById('run-button').classList.add('bg-red-600', 'hover:bg-red-700');
+            document.getElementById('grid-message').textContent = `Starting fast training for up to ${MAX_EPISODES_FOR_RUN} episodes...`;
+            
+            // Use setInterval to run steps fast and update UI visibly
+            trainingInterval = setInterval(() => {
+                // Run multiple steps per interval cycle to speed up training
+                for (let i = 0; i < 5; i++) {
+                    // If goal reached or max episodes hit, stop will be called inside runSingleStep
+                    if (!isTrainingMode) return; 
+                    runSingleStep();
+                }
+            }, 10); // Run steps every 10ms (approx 500 steps/second)
+        }
+
+        /** Stops the fast training loop. */
+        function stopTraining(completed = false) {
+            if (trainingInterval) {
+                clearInterval(trainingInterval);
+            }
+            isTrainingMode = false;
+            document.getElementById('run-button').textContent = 'Run Training (Auto)';
+            document.getElementById('run-button').classList.remove('bg-red-600', 'hover:bg-red-700');
+            document.getElementById('run-button').classList.add('bg-indigo-600', 'hover:bg-indigo-700');
+            
+            // Ensure final UI update is performed
+            renderGrid(currentStateIdx);
+            renderQTable();
+            updateStatus();
+
+            if (completed) {
+                 document.getElementById('grid-message').textContent = `Training completed after ${MAX_EPISODES_FOR_RUN} episodes! Agent has learned the optimal path.`;
+            } else {
+                 document.getElementById('grid-message').textContent = `Training manually paused at Episode ${currentEpisode}. Press SPACE for single steps.`;
+            }
+        }
+
+        // --- Rendering Functions ---
+
+        /** Updates the status messages. */
+        function updateStatus(lastReward = 0, lastAction = 'Start') {
+            document.getElementById('status-episodes').textContent = `Episode: ${currentEpisode}`;
+            document.getElementById('status-step').textContent = `Step: ${currentStep}`;
+            document.getElementById('status-epsilon').textContent = `Epsilon: ${epsilon.toFixed(2)}`;
+            document.getElementById('status-reward').textContent = `Reward: ${episodeReward.toFixed(2)}`;
+            
+            // Highlight when goal is reached
+            if (currentStateIdx === GOAL_STATE_IDX) {
+                 document.getElementById('status-episodes').classList.add('text-green-600');
+            } else {
+                 document.getElementById('status-episodes').classList.remove('text-green-600');
+            }
+            
+            // Provide feedback on the last action taken
+            if (currentStep > 0 && !isTrainingMode) {
+                 const currentMsg = document.getElementById('grid-message').textContent;
+                 // Only overwrite if it's a standard step message
+                 if (!currentMsg.includes('GOAL REACHED') && !currentMsg.includes('Starting new episode')) {
+                    document.getElementById('grid-message').textContent = `Agent took action ${lastAction} and received reward ${lastReward.toFixed(1)}.`;
+                 }
+            }
+        }
+
+
+        /** Draws the 3x3 grid visualization. */
+        function renderGrid(agentIdx) {
+            const container = document.getElementById('grid-container');
+            container.innerHTML = '';
+            
+            for (let i = 0; i < NUM_STATES; i++) {
+                const cell = document.createElement('div');
+                cell.classList.add('grid-cell', 'rounded');
+                
+                let content = '';
+                let bgColor = 'bg-white';
+                
+                if (i === GOAL_STATE_IDX) {
+                    content = 'G';
+                    bgColor = 'bg-green-500';
+                    cell.classList.add('goal');
+                } else {
+                    content = '';
+                    bgColor = 'bg-gray-50';
+                }
+
+                if (i === agentIdx) {
+                    content = 'A';
+                    cell.classList.add('agent');
+                    // Override background color if agent is on a regular space
+                    if (i !== GOAL_STATE_IDX) {
+                         bgColor = 'bg-blue-300';
+                    }
+                }
+                
+                // Add the appropriate classes
+                cell.classList.add(bgColor);
+                cell.textContent = content;
+                container.appendChild(cell);
+            }
+        }
+
+        /** Draws the Q-Table. */
+        function renderQTable() {
+            const tbody = document.getElementById('q-table-body');
+            tbody.innerHTML = '';
+
+            for (let i = 0; i < NUM_STATES; i++) {
+                const row = document.createElement('tr');
+                
+                // Highlight the row of the current state
+                if (i === currentStateIdx) {
+                    row.classList.add('bg-blue-50', 'border-blue-500', 'border-l-4'); 
+                } else {
+                    row.classList.add(i % 2 === 0 ? 'bg-white' : 'bg-gray-50');
+                }
+                row.classList.add('hover:bg-gray-100');
+
+
+                // State (R, C) column
+                const [r, c] = idxToRc(i);
+                let stateCell = document.createElement('td');
+                stateCell.classList.add('px-3', 'py-2', 'whitespace-nowrap', 'text-sm', 'font-medium', 'text-gray-900', 'border-r');
+                stateCell.innerHTML = `${i} (${r + 1}, ${c + 1})`; // 1-indexed display
+                row.appendChild(stateCell);
+
+                let bestQ = -Infinity;
+                let bestActionIdx = -1;
+
+                // Find best action for highlighting
+                qTable[i].forEach((q, index) => {
+                    if (q > bestQ) {
+                        bestQ = q;
+                        bestActionIdx = index;
+                    }
+                });
+
+                // Action Q-Values columns
+                qTable[i].forEach((q, index) => {
+                    let cell = document.createElement('td');
+                    cell.classList.add('px-3', 'py-2', 'whitespace-nowrap', 'text-sm', 'text-center', 'font-mono');
+                    
+                    // Highlight the best action for the current state
+                    if (index === bestActionIdx) {
+                        cell.classList.add('bg-yellow-100', 'text-yellow-800', 'font-bold', 'rounded-sm', 'shadow-sm');
+                    } else {
+                        cell.classList.add('text-gray-500');
+                    }
+                    
+                    cell.textContent = q.toFixed(2);
+                    row.appendChild(cell);
+                });
+
+                // Best Action column
+                let bestActionCell = document.createElement('td');
+                bestActionCell.classList.add('px-3', 'py-2', 'whitespace-nowrap', 'text-sm', 'text-center', 'font-bold', 'text-indigo-600');
+                bestActionCell.textContent = bestActionIdx !== -1 ? ACTIONS[bestActionIdx] : 'N/A';
+                row.appendChild(bestActionCell);
+
+                tbody.appendChild(row);
+            }
+        }
+
+
+        // --- Event Listeners and Initialization ---
+
+        function init() {
+            // Set initial message
+            document.getElementById('grid-message').textContent = `Agent is at State ${currentStateIdx} (R1, C1). Goal is at State ${GOAL_STATE_IDX} (R3, C3).`;
+            
+            renderGrid(currentStateIdx);
+            renderQTable();
+            updateStatus();
+        }
+
+        // Spacebar listener (for single steps)
+        document.addEventListener('keydown', (e) => {
+            if (e.code === 'Space') {
+                e.preventDefault(); 
+                if (isTrainingMode) {
+                    stopTraining(false); // Manually stop training if spacebar is pressed
+                } 
+                runSingleStep();
+            }
+        });
+
+        // Run/Stop Button listener (for toggle)
+        document.getElementById('run-button').addEventListener('click', () => {
+             if (isTrainingMode) {
+                 stopTraining(false);
+             } else {
+                 startTraining();
+             }
+        });
+        
+        // Step Button listener
+        document.getElementById('step-button').addEventListener('click', () => {
+             if (isTrainingMode) {
+                 stopTraining(false);
+             } 
+             runSingleStep();
+        });
+
+
+        // Initialize the app immediately after the script loads (DOM is ready)
+        init(); 
+    </script>
+</body>
+</html>
