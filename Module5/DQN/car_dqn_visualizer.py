@@ -1,3 +1,5 @@
+# pip install pygame
+
 import numpy as np
 import random
 import torch
@@ -12,7 +14,7 @@ import os
 # Define a named tuple for experience transitions
 Transition = namedtuple('Transition', ('state', 'action', 'reward', 'next_state', 'done'))
 
-# --- 1.1. The Simple Car Driving Environment (CarEnv) ---
+# --- 1.1. The Car Driving Environment  ---
 class CarEnv:
     """
     A 2D grid-based car driving game (10x10 grid) with obstacles.
@@ -71,7 +73,7 @@ class CarEnv:
     def step(self, action):
         """Processes one step given the agent's action."""
         
-        # === REWARD SHAPING (FIX 1) ===
+        # === REWARD SHAPING  ===
         # 1. Calculate distance to goal *before* the move
         old_dist = math.dist(self.car_pos, self.GOAL_POS)
         # ==============================
@@ -147,7 +149,7 @@ class CarEnv:
         
         return new_obs, reward, done, info
 
-# --- 1.2. The Deep Q-Network (DQN) Model (The Brain) ---
+# --- 1.2. The Deep Q-Network (DQN) Model  ---
 class DQN(nn.Module):
     """The neural network that approximates the Q-function."""
     def __init__(self, observation_size, action_size):
@@ -162,7 +164,7 @@ class DQN(nn.Module):
     def forward(self, x):
         return self.net(x)
 
-# --- 1.3. Experience Replay Buffer (ReplayBuffer) ---
+# --- 1.3. Experience Replay Buffer  ---
 class ReplayBuffer:
     """Stores experience transitions for replay training."""
     def __init__(self, capacity):
@@ -611,13 +613,13 @@ def run_visualizer():
                     if loss is not None:
                              # Log loss to CONSOLE, not Pygame panel
                              if agent.steps_done % 100 == 0:
-                                 print(f"📈 Step {agent.steps_done}: Loss={loss:.4f}")
+                                 print(f"Step {agent.steps_done}: Loss={loss:.4f}")
                 
                 # 5. Update target network periodically 
                 if agent.steps_done % TARGET_UPDATE_FREQ == 0:
                     agent.target_model.load_state_dict(agent.model.state_dict())
                     # Log update to CONSOLE, not Pygame panel
-                    print(f"🔄 Target Network Updated at step {agent.steps_done}")
+                    print(f"Target Network Updated at step {agent.steps_done}")
 
 
             # 6. Update RL metrics
@@ -630,7 +632,7 @@ def run_visualizer():
                     move_log = "🎉 **GOAL REACHED!**"
                     success_count += 1
                 elif reward < -5: 
-                    move_log = f"🚫 **EPISODE CRASHED!** ({info['outcome']})"
+                    move_log = f"**EPISODE CRASHED!** ({info['outcome']})"
                 else:
                     move_log = f"Episode Ended: {info['outcome']}" 
             else:
@@ -644,7 +646,7 @@ def run_visualizer():
                 # --- Auto-Stop Logic ---
                 # Only stop if in training mode (not exploiting a finished model)
                 if success_count >= SUCCESS_THRESHOLD and not is_trained: 
-                    print(f"✅ Reached {SUCCESS_THRESHOLD} goals! Saving model and stopping.")
+                    print(f"Reached {SUCCESS_THRESHOLD} goals! Saving model and stopping.")
                     if agent.save_model(agent.MODEL_PATH):
                         print(f"Model saved successfully to {agent.MODEL_PATH}.")
                     running = False # Stop the main loop
